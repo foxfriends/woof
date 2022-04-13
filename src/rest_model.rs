@@ -2,7 +2,7 @@ use super::PageNumberPagination;
 use actix_web::{error, http::StatusCode, web, HttpResponse, Scope};
 use sea_orm::{
     ActiveModelTrait, Condition, DatabaseConnection, EntityTrait, IntoActiveModel, PaginatorTrait,
-    PrimaryKeyTrait, QueryFilter,
+    PrimaryKeyTrait, QueryFilter, PrimaryKeyToColumn, Iterable, sea_query::IntoValueTuple,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
@@ -35,6 +35,14 @@ where
     ActiveModel: ActiveModelTrait<Entity = Entity> + 'static,
     <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType: DeserializeOwned + Clone,
 {
+    fn set_primary_key(primary_key: <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType, active_model: &mut ActiveModel) {
+        let pk_columns = <Entity as EntityTrait>::PrimaryKey::iter().map(PrimaryKeyToColumn::into_column);
+        let pk_values = primary_key.into_value_tuple();
+        for (column, value) in pk_columns.zip(pk_values) {
+            active_model.set(column, value);
+        }
+    }
+
     pub fn service(path: &str) -> Scope {
         web::scope(path)
             .route("/", web::get().to(Self::list))
@@ -42,6 +50,7 @@ where
             .route("/{id}", web::get().to(Self::get))
             .route("/{id}", web::delete().to(Self::delete))
             .route("/{id}", web::patch().to(Self::update))
+            .route("/{id}", web::put().to(Self::replace))
     }
 
     async fn get(
@@ -75,11 +84,28 @@ where
     }
 
     async fn update(
+        path: web::Path<<Entity::PrimaryKey as PrimaryKeyTrait>::ValueType>,
         body: web::Json<Update>,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<web::Json<Entity::Model>> {
+        let mut active_model = body.clone().into_active_model();
+        Self::set_primary_key(path.clone(), &mut active_model);
         Ok(web::Json(
-            Entity::insert(body.clone().into_active_model())
+            Entity::update(active_model)
+                .exec(&**db)
+                .await?,
+        ))
+    }
+
+    async fn replace(
+        path: web::Path<<Entity::PrimaryKey as PrimaryKeyTrait>::ValueType>,
+        body: web::Json<Insert>,
+        db: web::Data<DatabaseConnection>,
+    ) -> crate::Result<web::Json<Entity::Model>> {
+        let mut active_model = body.clone().into_active_model();
+        Self::set_primary_key(path.clone(), &mut active_model);
+        Ok(web::Json(
+            Entity::insert(active_model)
                 .exec_with_returning(&**db)
                 .await?,
         ))
