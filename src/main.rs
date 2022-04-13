@@ -3,9 +3,13 @@ use sea_orm::Database;
 
 mod entity;
 mod error;
+mod pagination;
 mod rest_model;
 
+mod users;
+
 pub use error::{Error, Result};
+pub use pagination::{CursorPagination, LimitOffsetPagination, PageNumberPagination};
 pub use rest_model::RestModel;
 
 #[actix_web::main]
@@ -19,8 +23,9 @@ async fn main() -> anyhow::Result<()> {
             .service(RestModel::<
                 entity::users::Entity,
                 entity::users::ActiveModel,
-                entity::users::CreateModel,
-                entity::users::UpdateModel,
+                users::CreateModel,
+                users::UpdateModel,
+                users::FilterModel,
             >::service("/users"))
     })
     .bind(("0.0.0.0", 8080))?
