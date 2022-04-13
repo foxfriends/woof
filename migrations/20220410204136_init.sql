@@ -22,9 +22,8 @@ CREATE TABLE comments (
 );
 
 CREATE TABLE votes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    positive BOOLEAN NOT NULL,
     voter UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     post UUID NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
-    UNIQUE (voter, post)
+    positive BOOLEAN NOT NULL,
+    PRIMARY KEY (voter, post)
 );
