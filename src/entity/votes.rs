@@ -7,10 +7,10 @@ use serde::{Deserialize, Serialize};
 #[sea_orm(table_name = "votes")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub id: Uuid,
-    pub positive: bool,
     pub voter: Uuid,
+    #[sea_orm(primary_key, auto_increment = false)]
     pub post: Uuid,
+    pub positive: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
