@@ -9,10 +9,12 @@ mod model;
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
     dotenv::dotenv()?;
+    pretty_env_logger::init();
     let db = Database::connect(std::env::var("DATABASE_URL").unwrap()).await?;
 
     HttpServer::new(move || {
         App::new()
+            .wrap(actix_web::middleware::NormalizePath::trim())
             .app_data(web::Data::new(db.clone()))
             .service(RestModel::<entity::prelude::Users>::service("/users"))
             .service(RestModel::<entity::prelude::Posts>::service("/posts"))

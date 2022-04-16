@@ -1,2 +1,2 @@
 #!/bin/sh
-sea-orm-cli generate entity -o ./src/entity/ --with-serde both
+sea-orm-cli generate entity -o ./src/bin/entity/ --with-serde both --expanded-format

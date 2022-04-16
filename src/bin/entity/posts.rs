@@ -3,31 +3,73 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "posts")]
+#[derive(Copy, Clone, Default, Debug, DeriveEntity)]
+pub struct Entity;
+
+impl EntityName for Entity {
+    fn table_name(&self) -> &str {
+        "posts"
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, DeriveModel, DeriveActiveModel, Serialize, Deserialize)]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub title: String,
-    #[sea_orm(column_type = "Text")]
     pub content: String,
     pub author: Uuid,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+#[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
+pub enum Column {
+    Id,
+    Title,
+    Content,
+    Author,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
+pub enum PrimaryKey {
+    Id,
+}
+
+impl PrimaryKeyTrait for PrimaryKey {
+    type ValueType = Uuid;
+    fn auto_increment() -> bool {
+        false
+    }
+}
+
+#[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::users::Entity",
-        from = "Column::Author",
-        to = "super::users::Column::Id",
-        on_update = "NoAction",
-        on_delete = "Cascade"
-    )]
     Users,
-    #[sea_orm(has_many = "super::comments::Entity")]
     Comments,
-    #[sea_orm(has_many = "super::votes::Entity")]
     Votes,
+}
+
+impl ColumnTrait for Column {
+    type EntityName = Entity;
+    fn def(&self) -> ColumnDef {
+        match self {
+            Self::Id => ColumnType::Uuid.def(),
+            Self::Title => ColumnType::String(Some(255u32)).def(),
+            Self::Content => ColumnType::Text.def(),
+            Self::Author => ColumnType::Uuid.def(),
+        }
+    }
+}
+
+impl RelationTrait for Relation {
+    fn def(&self) -> RelationDef {
+        match self {
+            Self::Users => Entity::belongs_to(super::users::Entity)
+                .from(Column::Author)
+                .to(super::users::Column::Id)
+                .into(),
+            Self::Comments => Entity::has_many(super::comments::Entity).into(),
+            Self::Votes => Entity::has_many(super::votes::Entity).into(),
+        }
+    }
 }
 
 impl Related<super::users::Entity> for Entity {

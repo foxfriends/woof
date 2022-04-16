@@ -25,5 +25,5 @@ CREATE TABLE votes (
     voter UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
     post UUID NOT NULL REFERENCES posts (id) ON DELETE CASCADE,
     positive BOOLEAN NOT NULL,
-    PRIMARY KEY (voter, post)
+    PRIMARY KEY (post, voter)
 );

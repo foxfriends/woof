@@ -1,7 +1,8 @@
 use crate::entity::users::*;
+use actix_web::dev::{Path, Url};
 use sea_orm::entity::prelude::*;
 use sea_orm::entity::{ActiveValue, IntoActiveModel};
-use sea_orm::Condition;
+use sea_orm::{Condition, PrimaryKeyTrait};
 use serde::{Deserialize, Serialize};
 use woof::{Create, Filter, Rest, Update};
 
@@ -78,4 +79,18 @@ impl Rest for Entity {
     type Create = CreateModel;
     type Update = UpdateModel;
     type Filter = FilterModel;
+
+    fn id_from_path(
+        scope: Option<&str>,
+        path: &Path<Url>,
+    ) -> woof::Result<<Self::PrimaryKey as PrimaryKeyTrait>::ValueType> {
+        let scope = scope.map(|scope| format!("{scope}_")).unwrap_or_default();
+        let id_path = scope.to_owned() + "id";
+        let id = path
+            .get(&id_path)
+            .ok_or_else(|| woof::error::MissingPathSegment(&id_path))?
+            .parse()
+            .map_err(|_| woof::error::InvalidPathSegment(&id_path))?;
+        Ok(id)
+    }
 }

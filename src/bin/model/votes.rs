@@ -1,7 +1,8 @@
 use crate::entity::votes::*;
+use actix_web::dev::{Path, Url};
 use sea_orm::entity::prelude::*;
 use sea_orm::entity::{ActiveValue, IntoActiveModel};
-use sea_orm::Condition;
+use sea_orm::{Condition, PrimaryKeyTrait};
 use serde::{Deserialize, Serialize};
 use woof::{Create, Filter, Rest, Update};
 
@@ -79,4 +80,24 @@ impl Rest for Entity {
     type Update = UpdateModel;
     type Create = CreateModel;
     type Filter = FilterModel;
+
+    fn id_from_path(
+        scope: Option<&str>,
+        path: &Path<Url>,
+    ) -> woof::Result<<Self::PrimaryKey as PrimaryKeyTrait>::ValueType> {
+        let scope = scope.map(|scope| format!("{scope}_")).unwrap_or_default();
+        let post_path = scope.to_owned() + "post";
+        let post = path
+            .get(&post_path)
+            .ok_or_else(|| woof::error::MissingPathSegment(&post_path))?
+            .parse()
+            .map_err(|_| woof::error::InvalidPathSegment(&post_path))?;
+        let voter_path = scope.to_owned() + "voter";
+        let voter = path
+            .get(&voter_path)
+            .ok_or_else(|| woof::error::MissingPathSegment(&voter_path))?
+            .parse()
+            .map_err(|_| woof::error::InvalidPathSegment(&voter_path))?;
+        Ok((post, voter))
+    }
 }

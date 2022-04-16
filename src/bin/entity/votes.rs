@@ -3,34 +3,72 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "votes")]
+#[derive(Copy, Clone, Default, Debug, DeriveEntity)]
+pub struct Entity;
+
+impl EntityName for Entity {
+    fn table_name(&self) -> &str {
+        "votes"
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, DeriveModel, DeriveActiveModel, Serialize, Deserialize)]
 pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
     pub voter: Uuid,
-    #[sea_orm(primary_key, auto_increment = false)]
     pub post: Uuid,
     pub positive: bool,
 }
 
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+#[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
+pub enum Column {
+    Voter,
+    Post,
+    Positive,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
+pub enum PrimaryKey {
+    Post,
+    Voter,
+}
+
+impl PrimaryKeyTrait for PrimaryKey {
+    type ValueType = (Uuid, Uuid);
+    fn auto_increment() -> bool {
+        false
+    }
+}
+
+#[derive(Copy, Clone, Debug, EnumIter)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::posts::Entity",
-        from = "Column::Post",
-        to = "super::posts::Column::Id",
-        on_update = "NoAction",
-        on_delete = "Cascade"
-    )]
     Posts,
-    #[sea_orm(
-        belongs_to = "super::users::Entity",
-        from = "Column::Voter",
-        to = "super::users::Column::Id",
-        on_update = "NoAction",
-        on_delete = "Cascade"
-    )]
     Users,
+}
+
+impl ColumnTrait for Column {
+    type EntityName = Entity;
+    fn def(&self) -> ColumnDef {
+        match self {
+            Self::Voter => ColumnType::Uuid.def(),
+            Self::Post => ColumnType::Uuid.def(),
+            Self::Positive => ColumnType::Boolean.def(),
+        }
+    }
+}
+
+impl RelationTrait for Relation {
+    fn def(&self) -> RelationDef {
+        match self {
+            Self::Posts => Entity::belongs_to(super::posts::Entity)
+                .from(Column::Post)
+                .to(super::posts::Column::Id)
+                .into(),
+            Self::Users => Entity::belongs_to(super::users::Entity)
+                .from(Column::Voter)
+                .to(super::users::Column::Id)
+                .into(),
+        }
+    }
 }
 
 impl Related<super::posts::Entity> for Entity {

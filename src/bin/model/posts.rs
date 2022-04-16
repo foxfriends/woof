@@ -1,4 +1,5 @@
 use crate::entity::posts::*;
+use actix_web::dev::{Path, Url};
 use sea_orm::entity::prelude::*;
 use sea_orm::entity::{ActiveValue, IntoActiveModel};
 use sea_orm::Condition;
@@ -79,4 +80,18 @@ impl Rest for Entity {
     type Update = UpdateModel;
     type Create = CreateModel;
     type Filter = FilterModel;
+
+    fn id_from_path(
+        scope: Option<&str>,
+        path: &Path<Url>,
+    ) -> woof::Result<<Self::PrimaryKey as PrimaryKeyTrait>::ValueType> {
+        let scope = scope.map(|scope| format!("{scope}_")).unwrap_or_default();
+        let id_path = scope.to_owned() + "id";
+        let id = path
+            .get(&id_path)
+            .ok_or_else(|| woof::error::MissingPathSegment(&id_path))?
+            .parse()
+            .map_err(|_| woof::error::InvalidPathSegment(&id_path))?;
+        Ok(id)
+    }
 }

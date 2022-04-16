@@ -1,6 +1,6 @@
 use super::PageNumberPagination;
 use crate::{Filter, Rest};
-use actix_web::{error, http::StatusCode, web, HttpResponse, Scope};
+use actix_web::{error, http::StatusCode, web, HttpResponse, Scope, HttpRequest};
 use sea_orm::{
     sea_query::IntoValueTuple, ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
     Iterable, PaginatorTrait, PrimaryKeyToColumn, PrimaryKeyTrait, QueryFilter,
@@ -11,8 +11,7 @@ use std::marker::PhantomData;
 pub struct RestModel<Entity: Rest>(PhantomData<Entity>)
 where
     Entity::Model:
-        Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
-    <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType: DeserializeOwned + Clone;
+        Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync;
 
 impl<Entity: Rest> RestModel<Entity>
 where
@@ -33,20 +32,22 @@ where
     }
 
     pub fn service(path: &str) -> Scope {
+        let id_path = Entity::id_path(None);
         web::scope(path)
             .route("/", web::get().to(Self::list))
             .route("/new", web::post().to(Self::create))
-            .route("/{id}", web::get().to(Self::get))
-            .route("/{id}", web::delete().to(Self::delete))
-            .route("/{id}", web::patch().to(Self::update))
-            .route("/{id}", web::put().to(Self::replace))
+            .route(&id_path, web::get().to(Self::get))
+            .route(&id_path, web::delete().to(Self::delete))
+            .route(&id_path, web::patch().to(Self::update))
+            .route(&id_path, web::put().to(Self::replace))
     }
 
     async fn get(
-        path: web::Path<<Entity::PrimaryKey as PrimaryKeyTrait>::ValueType>,
+        request: HttpRequest,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<web::Json<Entity::Model>> {
-        Entity::find_by_id(path.clone())
+        let id = Entity::id_from_path(None, request.match_info())?;
+        Entity::find_by_id(id)
             .one(&**db)
             .await?
             .map(web::Json)
@@ -54,10 +55,11 @@ where
     }
 
     async fn delete(
-        path: web::Path<<Entity::PrimaryKey as PrimaryKeyTrait>::ValueType>,
+        request: HttpRequest,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<HttpResponse> {
-        Entity::delete_by_id(path.clone()).exec(&**db).await?;
+        let id = Entity::id_from_path(None, request.match_info())?;
+        Entity::delete_by_id(id).exec(&**db).await?;
         Ok(HttpResponse::new(StatusCode::NO_CONTENT))
     }
 
@@ -73,22 +75,24 @@ where
     }
 
     async fn update(
-        path: web::Path<<Entity::PrimaryKey as PrimaryKeyTrait>::ValueType>,
+        request: HttpRequest,
         body: web::Json<Entity::Update>,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<web::Json<Entity::Model>> {
         let mut active_model = body.clone().into_active_model();
-        Self::set_primary_key(path.clone(), &mut active_model);
+        let id = Entity::id_from_path(None, request.match_info())?;
+        Self::set_primary_key(id, &mut active_model);
         Ok(web::Json(Entity::update(active_model).exec(&**db).await?))
     }
 
     async fn replace(
-        path: web::Path<<Entity::PrimaryKey as PrimaryKeyTrait>::ValueType>,
+        request: HttpRequest,
         body: web::Json<Entity::Create>,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<web::Json<Entity::Model>> {
         let mut active_model = body.clone().into_active_model();
-        Self::set_primary_key(path.clone(), &mut active_model);
+        let id = Entity::id_from_path(None, request.match_info())?;
+        Self::set_primary_key(id, &mut active_model);
         Ok(web::Json(
             Entity::insert(active_model)
                 .exec_with_returning(&**db)

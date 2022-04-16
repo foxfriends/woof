@@ -8,6 +8,10 @@ pub struct Error(ErrorInternals);
 #[derive(Debug)]
 enum ErrorInternals {
     HttpError(actix_web::Error),
+    Custom {
+        status_code: StatusCode,
+        message: String,
+    },
     Other {
         status_code: StatusCode,
         source: Box<dyn std::error::Error + Send + Sync + 'static>,
@@ -17,9 +21,12 @@ enum ErrorInternals {
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         match &self.0 {
-            ErrorInternals::HttpError(source) => write!(f, "woof_test::Error: {}", source),
+            ErrorInternals::HttpError(source) => write!(f, "woof::Error: {}", source),
             ErrorInternals::Other { source, .. } => {
-                write!(f, "woof_test::Error {}", source)
+                write!(f, "woof::Error: {}", source)
+            }
+            ErrorInternals::Custom { message, .. } => {
+                write!(f, "woof::Error: {}", message)
             }
         }
     }
@@ -30,6 +37,7 @@ impl std::error::Error for Error {
         match &self.0 {
             ErrorInternals::HttpError(source) => Some(source),
             ErrorInternals::Other { source, .. } => Some(source.as_ref()),
+            ErrorInternals::Custom { .. } => None,
         }
     }
 }
@@ -42,6 +50,10 @@ impl ResponseError for Error {
                 status_code,
                 source,
             } => HttpResponse::build(*status_code).body(source.to_string()),
+            ErrorInternals::Custom {
+                status_code,
+                message,
+            } => HttpResponse::build(*status_code).body(message.clone()),
         }
     }
 }
@@ -71,3 +83,19 @@ impl From<sea_orm::error::DbErr> for Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+#[allow(non_snake_case)]
+pub fn MissingPathSegment(segment: impl Display) -> Error {
+    Error(ErrorInternals::Custom {
+        status_code: StatusCode::NOT_FOUND,
+        message: format!("Missing path segment {segment}"),
+    })
+}
+
+#[allow(non_snake_case)]
+pub fn InvalidPathSegment(segment: impl Display) -> Error {
+    Error(ErrorInternals::Custom {
+        status_code: StatusCode::BAD_REQUEST,
+        message: format!("Invalid path segment {segment}"),
+    })
+}
