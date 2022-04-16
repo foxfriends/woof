@@ -26,7 +26,7 @@ where
     pub fn new(path: &str) -> Self {
         let id_path = Entity::id_path(None);
         let scope = web::scope(path)
-            .route("/", web::get().to(Self::list))
+            .route("", web::get().to(Self::list))
             .route("/new", web::post().to(Self::create))
             .route(&id_path, web::get().to(Self::get))
             .route(&id_path, web::delete().to(Self::delete))
@@ -48,6 +48,17 @@ where
         for (column, value) in pk_columns.zip(pk_values) {
             active_model.set(column, value);
         }
+    }
+
+    pub fn instance_service<F>(self, action: F) -> Self
+    where
+        F: actix_web::dev::HttpServiceFactory + 'static,
+    {
+        let id_path = Entity::id_path(None);
+        let scope = self
+            .scope
+            .service(web::scope(&id_path).service(action));
+        Self { scope, ..self }
     }
 
     pub fn into_service(self) -> Scope {
