@@ -3,6 +3,10 @@ edition = "2021"
 name = "woof"
 version = "0.1.0"
 
+[lib]
+name = "woof"
+path = "src/lib.rs"
+
 [dependencies]
 actix-web = "4.0.1"
 anyhow = "1.0.56"

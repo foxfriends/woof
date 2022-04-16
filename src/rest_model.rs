@@ -1,41 +1,25 @@
 use super::PageNumberPagination;
+use serde::{Serialize, de::DeserializeOwned};
 use actix_web::{error, http::StatusCode, web, HttpResponse, Scope};
 use sea_orm::{
-    ActiveModelTrait, Condition, DatabaseConnection, EntityTrait, IntoActiveModel, PaginatorTrait,
+    ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel, PaginatorTrait,
     PrimaryKeyTrait, QueryFilter, PrimaryKeyToColumn, Iterable, sea_query::IntoValueTuple,
 };
-use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
+use crate::{Rest, Filter};
 
-pub struct RestModel<Entity, ActiveModel, Insert, Update, Filter>(
-    PhantomData<Entity>,
-    PhantomData<ActiveModel>,
-    PhantomData<Insert>,
-    PhantomData<Update>,
-    PhantomData<Filter>,
-);
-
-pub trait FilterSet {
-    fn limit(&self) -> usize;
-    fn offset(&self) -> usize;
-    fn page(&self) -> usize;
-    fn cursor(&self) -> Option<&str>;
-
-    fn condition(&self) -> Condition;
-}
-
-impl<Entity, ActiveModel, Insert, Update, Filter>
-    RestModel<Entity, ActiveModel, Insert, Update, Filter>
+pub struct RestModel<Entity: Rest>(PhantomData<Entity>)
 where
-    Entity: EntityTrait + 'static,
-    Entity::Model: Serialize + DeserializeOwned + IntoActiveModel<ActiveModel> + Sync + Send,
-    Insert: Serialize + DeserializeOwned + IntoActiveModel<ActiveModel> + Clone + 'static,
-    Update: Serialize + DeserializeOwned + IntoActiveModel<ActiveModel> + Clone + 'static,
-    Filter: DeserializeOwned + FilterSet + 'static,
-    ActiveModel: ActiveModelTrait<Entity = Entity> + 'static,
+    Entity::Model: Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
+    <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType: DeserializeOwned + Clone,
+;
+
+impl<Entity: Rest> RestModel<Entity>
+where
+    Entity::Model: Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
     <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType: DeserializeOwned + Clone,
 {
-    fn set_primary_key(primary_key: <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType, active_model: &mut ActiveModel) {
+    fn set_primary_key(primary_key: <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType, active_model: &mut Entity::ActiveModel) {
         let pk_columns = <Entity as EntityTrait>::PrimaryKey::iter().map(PrimaryKeyToColumn::into_column);
         let pk_values = primary_key.into_value_tuple();
         for (column, value) in pk_columns.zip(pk_values) {
@@ -73,7 +57,7 @@ where
     }
 
     async fn create(
-        body: web::Json<Insert>,
+        body: web::Json<Entity::Create>,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<web::Json<Entity::Model>> {
         Ok(web::Json(
@@ -85,7 +69,7 @@ where
 
     async fn update(
         path: web::Path<<Entity::PrimaryKey as PrimaryKeyTrait>::ValueType>,
-        body: web::Json<Update>,
+        body: web::Json<Entity::Update>,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<web::Json<Entity::Model>> {
         let mut active_model = body.clone().into_active_model();
@@ -99,7 +83,7 @@ where
 
     async fn replace(
         path: web::Path<<Entity::PrimaryKey as PrimaryKeyTrait>::ValueType>,
-        body: web::Json<Insert>,
+        body: web::Json<Entity::Create>,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<web::Json<Entity::Model>> {
         let mut active_model = body.clone().into_active_model();
@@ -112,7 +96,7 @@ where
     }
 
     async fn list(
-        query: web::Query<Filter>,
+        query: web::Query<Entity::Filter>,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<web::Json<PageNumberPagination<Entity::Model>>> {
         let page = query.page();

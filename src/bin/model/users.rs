@@ -3,12 +3,15 @@ use sea_orm::entity::prelude::*;
 use sea_orm::entity::{ActiveValue, IntoActiveModel};
 use sea_orm::Condition;
 use serde::{Deserialize, Serialize};
+use woof::{Create, Filter, Rest, Update};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, DeriveIntoActiveModel)]
 pub struct CreateModel {
     pub username: String,
     pub email: String,
 }
+
+impl Create<ActiveModel> for CreateModel {}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct UpdateModel {
@@ -29,6 +32,8 @@ impl IntoActiveModel<ActiveModel> for UpdateModel {
     }
 }
 
+impl Update<ActiveModel> for UpdateModel {}
+
 #[derive(Serialize, Deserialize)]
 pub struct FilterModel {
     limit: Option<usize>,
@@ -39,7 +44,7 @@ pub struct FilterModel {
     username: Option<String>,
 }
 
-impl crate::rest_model::FilterSet for FilterModel {
+impl Filter for FilterModel {
     fn limit(&self) -> usize {
         self.limit.unwrap_or(20)
     }
@@ -66,4 +71,11 @@ impl crate::rest_model::FilterSet for FilterModel {
         }
         condition
     }
+}
+
+impl Rest for Entity {
+    type ActiveModel = ActiveModel;
+    type Create = CreateModel;
+    type Update = UpdateModel;
+    type Filter = FilterModel;
 }
