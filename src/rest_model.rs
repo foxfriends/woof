@@ -8,10 +8,14 @@ use sea_orm::{
 use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
 
-pub struct RestModel<Entity: Rest>(PhantomData<Entity>)
+pub struct RestModel<Entity: Rest>
 where
     Entity::Model:
-        Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync;
+        Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync
+{
+    _pd: PhantomData<Entity>,
+    scope: Scope,
+}
 
 impl<Entity: Rest> RestModel<Entity>
 where
@@ -19,6 +23,13 @@ where
         Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
     <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType: DeserializeOwned + Clone,
 {
+    pub fn new(path: &str) -> Self {
+        Self {
+            _pd: PhantomData,
+            scope: web::scope(path),
+        }
+    }
+
     fn set_primary_key(
         primary_key: <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType,
         active_model: &mut Entity::ActiveModel,
@@ -31,9 +42,9 @@ where
         }
     }
 
-    pub fn service(path: &str) -> Scope {
+    pub fn into_service(self) -> Scope {
         let id_path = Entity::id_path(None);
-        web::scope(path)
+        self.scope
             .route("/", web::get().to(Self::list))
             .route("/new", web::post().to(Self::create))
             .route(&id_path, web::get().to(Self::get))
