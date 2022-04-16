@@ -11,7 +11,7 @@ use std::marker::PhantomData;
 pub struct RestModel<Entity: Rest>
 where
     Entity::Model:
-        Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync
+        Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
 {
     _pd: PhantomData<Entity>,
     scope: Scope,
@@ -24,9 +24,17 @@ where
     <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType: DeserializeOwned + Clone,
 {
     pub fn new(path: &str) -> Self {
+        let id_path = Entity::id_path(None);
+        let scope = web::scope(path)
+            .route("/", web::get().to(Self::list))
+            .route("/new", web::post().to(Self::create))
+            .route(&id_path, web::get().to(Self::get))
+            .route(&id_path, web::delete().to(Self::delete))
+            .route(&id_path, web::patch().to(Self::update))
+            .route(&id_path, web::put().to(Self::replace));
         Self {
             _pd: PhantomData,
-            scope: web::scope(path),
+            scope,
         }
     }
 
@@ -43,14 +51,7 @@ where
     }
 
     pub fn into_service(self) -> Scope {
-        let id_path = Entity::id_path(None);
         self.scope
-            .route("/", web::get().to(Self::list))
-            .route("/new", web::post().to(Self::create))
-            .route(&id_path, web::get().to(Self::get))
-            .route(&id_path, web::delete().to(Self::delete))
-            .route(&id_path, web::patch().to(Self::update))
-            .route(&id_path, web::put().to(Self::replace))
     }
 
     async fn get(
