@@ -1,26 +1,31 @@
 use super::PageNumberPagination;
-use serde::{Serialize, de::DeserializeOwned};
+use crate::{Filter, Rest};
 use actix_web::{error, http::StatusCode, web, HttpResponse, Scope};
 use sea_orm::{
-    ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel, PaginatorTrait,
-    PrimaryKeyTrait, QueryFilter, PrimaryKeyToColumn, Iterable, sea_query::IntoValueTuple,
+    sea_query::IntoValueTuple, ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
+    Iterable, PaginatorTrait, PrimaryKeyToColumn, PrimaryKeyTrait, QueryFilter,
 };
+use serde::{de::DeserializeOwned, Serialize};
 use std::marker::PhantomData;
-use crate::{Rest, Filter};
 
 pub struct RestModel<Entity: Rest>(PhantomData<Entity>)
 where
-    Entity::Model: Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
-    <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType: DeserializeOwned + Clone,
-;
+    Entity::Model:
+        Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
+    <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType: DeserializeOwned + Clone;
 
 impl<Entity: Rest> RestModel<Entity>
 where
-    Entity::Model: Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
+    Entity::Model:
+        Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
     <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType: DeserializeOwned + Clone,
 {
-    fn set_primary_key(primary_key: <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType, active_model: &mut Entity::ActiveModel) {
-        let pk_columns = <Entity as EntityTrait>::PrimaryKey::iter().map(PrimaryKeyToColumn::into_column);
+    fn set_primary_key(
+        primary_key: <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType,
+        active_model: &mut Entity::ActiveModel,
+    ) {
+        let pk_columns =
+            <Entity as EntityTrait>::PrimaryKey::iter().map(PrimaryKeyToColumn::into_column);
         let pk_values = primary_key.into_value_tuple();
         for (column, value) in pk_columns.zip(pk_values) {
             active_model.set(column, value);
@@ -74,11 +79,7 @@ where
     ) -> crate::Result<web::Json<Entity::Model>> {
         let mut active_model = body.clone().into_active_model();
         Self::set_primary_key(path.clone(), &mut active_model);
-        Ok(web::Json(
-            Entity::update(active_model)
-                .exec(&**db)
-                .await?,
-        ))
+        Ok(web::Json(Entity::update(active_model).exec(&**db).await?))
     }
 
     async fn replace(
