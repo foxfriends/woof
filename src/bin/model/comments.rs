@@ -83,7 +83,7 @@ impl Rest for Entity {
         path: &Path<Url>,
     ) -> woof::Result<<Self::PrimaryKey as PrimaryKeyTrait>::ValueType> {
         let scope = scope.map(|scope| format!("{scope}_")).unwrap_or_default();
-        let id_path = scope.to_owned() + "id";
+        let id_path = scope + "id";
         let id = path
             .get(&id_path)
             .ok_or_else(|| woof::error::MissingPathSegment(&id_path))?

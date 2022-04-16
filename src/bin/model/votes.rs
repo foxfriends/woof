@@ -86,13 +86,13 @@ impl Rest for Entity {
         path: &Path<Url>,
     ) -> woof::Result<<Self::PrimaryKey as PrimaryKeyTrait>::ValueType> {
         let scope = scope.map(|scope| format!("{scope}_")).unwrap_or_default();
-        let post_path = scope.to_owned() + "post";
+        let post_path = scope.clone() + "post";
         let post = path
             .get(&post_path)
             .ok_or_else(|| woof::error::MissingPathSegment(&post_path))?
             .parse()
             .map_err(|_| woof::error::InvalidPathSegment(&post_path))?;
-        let voter_path = scope.to_owned() + "voter";
+        let voter_path = scope + "voter";
         let voter = path
             .get(&voter_path)
             .ok_or_else(|| woof::error::MissingPathSegment(&voter_path))?
