@@ -1,9 +1,10 @@
+use super::{Create, Filter, Update};
 use actix_web::dev::{Path, Url};
 use sea_orm::{
-    ActiveModelTrait, Condition, EntityTrait, IdenStatic, IntoActiveModel, Iterable,
-    PrimaryKeyToColumn, PrimaryKeyTrait,
+    ActiveModelTrait, EntityTrait, IdenStatic, IntoActiveModel, Iterable, PrimaryKeyToColumn,
+    PrimaryKeyTrait,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::Serialize;
 
 pub trait Rest
 where
