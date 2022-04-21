@@ -1,6 +1,13 @@
-use super::PageNumberPagination;
+use crate::pagination::PageNumberPagination;
+use crate::{extractors, middleware};
 use crate::{Filter, Rest};
-use actix_web::{error, http::StatusCode, web, HttpRequest, HttpResponse, Scope};
+use actix_web::{
+    body::BoxBody,
+    dev::{ServiceFactory, ServiceRequest, ServiceResponse},
+    error,
+    http::StatusCode,
+    web, Error, HttpRequest, HttpResponse, Scope,
+};
 use sea_orm::{
     sea_query::IntoValueTuple, ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
     Iterable, PaginatorTrait, PrimaryKeyToColumn, PrimaryKeyTrait, QueryFilter,
@@ -19,15 +26,42 @@ where
     <<T::Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType:
         DeserializeOwned + Clone,
 {
-    pub fn as_service(path: &str) -> Scope {
+    // TODO: is this the best way to write this return type?
+    pub fn as_service(
+        path: &str,
+    ) -> Scope<
+        impl ServiceFactory<
+            ServiceRequest,
+            Config = (),
+            Response = ServiceResponse<BoxBody>,
+            Error = Error,
+            InitError = (),
+        >,
+    > {
         let id_path = T::id_path(None);
         web::scope(path)
             .route("", web::get().to(Self::list))
             .route("/new", web::post().to(Self::create))
-            .route(&id_path, web::get().to(Self::get))
-            .route(&id_path, web::delete().to(Self::delete))
-            .route(&id_path, web::patch().to(Self::update))
-            .route(&id_path, web::put().to(Self::replace))
+            .service(
+                web::resource(&id_path)
+                    .wrap(middleware::PrimaryKey::<T>::default())
+                    .route(web::get().to(Self::get)),
+            )
+            .service(
+                web::resource(&id_path)
+                    .wrap(middleware::PrimaryKey::<T>::default())
+                    .route(web::delete().to(Self::delete)),
+            )
+            .service(
+                web::resource(&id_path)
+                    .wrap(middleware::PrimaryKey::<T>::default())
+                    .route(web::patch().to(Self::update)),
+            )
+            .service(
+                web::resource(&id_path)
+                    .wrap(middleware::PrimaryKey::<T>::default())
+                    .route(web::put().to(Self::replace)),
+            )
     }
 
     fn set_primary_key(
@@ -43,11 +77,10 @@ where
     }
 
     async fn get(
-        request: HttpRequest,
+        id: extractors::PrimaryKey<T>,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<web::Json<T::Repr>> {
-        let id = T::id_from_path(None, request.match_info())?;
-        T::Entity::find_by_id(id)
+        T::Entity::find_by_id(id.clone())
             .one(&**db)
             .await?
             .map(From::from)
@@ -56,11 +89,10 @@ where
     }
 
     async fn delete(
-        request: HttpRequest,
+        id: extractors::PrimaryKey<T>,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<HttpResponse> {
-        let id = T::id_from_path(None, request.match_info())?;
-        T::Entity::delete_by_id(id).exec(&**db).await?;
+        T::Entity::delete_by_id(id.clone()).exec(&**db).await?;
         Ok(HttpResponse::new(StatusCode::NO_CONTENT))
     }
 
@@ -77,13 +109,12 @@ where
     }
 
     async fn update(
-        request: HttpRequest,
+        id: extractors::PrimaryKey<T>,
         body: web::Json<T::Update>,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<web::Json<T::Repr>> {
         let mut active_model = body.clone().into_active_model();
-        let id = T::id_from_path(None, request.match_info())?;
-        Self::set_primary_key(id, &mut active_model);
+        Self::set_primary_key(id.clone(), &mut active_model);
         Ok(web::Json(
             T::Entity::update(active_model).exec(&**db).await?.into(),
         ))

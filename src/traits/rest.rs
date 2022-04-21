@@ -21,8 +21,8 @@ pub trait Rest {
     fn id_path(scope: Option<&str>) -> String {
         let scope = scope.map(|scope| format!("{scope}_")).unwrap_or_default();
         <Self::Entity as EntityTrait>::PrimaryKey::iter()
-            .map(|key_col| format!("{{{}}}", scope.clone() + key_col.into_column().as_str()))
+            .map(|key_col| format!("/{{{}}}", scope.clone() + key_col.into_column().as_str()))
             .collect::<Vec<_>>()
-            .join("/")
+            .join("")
     }
 }

@@ -1,6 +1,9 @@
 pub mod error;
 mod pagination;
 
+mod extensions;
+mod extractors;
+mod middleware;
 mod rest_model;
 mod traits;
 
