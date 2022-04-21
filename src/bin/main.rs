@@ -18,7 +18,7 @@ async fn main() -> anyhow::Result<()> {
             .app_data(web::Data::new(db.clone()))
             .service(
                 RestModel::<model::users::RestModel>::new("/users")
-                    // .instance_service(RestModel::<Posts>::new("/posts").into_service())
+                    // .instance_service(RestModel::<model::posts::RestModel>::new("/posts").into_service())
                     .into_service(),
             )
             .service(RestModel::<model::posts::RestModel>::new("/posts").into_service())
