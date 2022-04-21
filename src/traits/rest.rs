@@ -1,15 +1,11 @@
 use super::{Create, Filter, Update};
 use actix_web::dev::{Path, Url};
 use sea_orm::{
-    ActiveModelTrait, EntityTrait, IdenStatic, IntoActiveModel, Iterable, PrimaryKeyToColumn,
-    PrimaryKeyTrait,
+    ActiveModelTrait, EntityTrait, IdenStatic, Iterable, PrimaryKeyToColumn, PrimaryKeyTrait,
 };
 use serde::Serialize;
 
-pub trait Rest
-where
-    <Self::Entity as EntityTrait>::Model: IntoActiveModel<Self::ActiveModel> + Send + Sync,
-{
+pub trait Rest {
     type Entity: EntityTrait;
     type Repr: Serialize + From<<Self::Entity as EntityTrait>::Model>;
     type ActiveModel: ActiveModelTrait<Entity = Self::Entity>;

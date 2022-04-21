@@ -8,11 +8,7 @@ use sea_orm::{
 use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
 
-pub struct RestModel<T>
-where
-    T: Rest + 'static,
-    <T::Entity as EntityTrait>::Model: IntoActiveModel<T::ActiveModel> + Send + Sync,
-{
+pub struct RestModel<T> {
     _pd: PhantomData<T>,
 }
 
