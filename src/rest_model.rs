@@ -14,7 +14,6 @@ where
     <T::Entity as EntityTrait>::Model: IntoActiveModel<T::ActiveModel> + Send + Sync,
 {
     _pd: PhantomData<T>,
-    scope: Scope,
 }
 
 impl<T> RestModel<T>
@@ -24,19 +23,15 @@ where
     <<T::Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType:
         DeserializeOwned + Clone,
 {
-    pub fn new(path: &str) -> Self {
+    pub fn as_service(path: &str) -> Scope {
         let id_path = T::id_path(None);
-        let scope = web::scope(path)
+        web::scope(path)
             .route("", web::get().to(Self::list))
             .route("/new", web::post().to(Self::create))
             .route(&id_path, web::get().to(Self::get))
             .route(&id_path, web::delete().to(Self::delete))
             .route(&id_path, web::patch().to(Self::update))
-            .route(&id_path, web::put().to(Self::replace));
-        Self {
-            _pd: PhantomData,
-            scope,
-        }
+            .route(&id_path, web::put().to(Self::replace))
     }
 
     fn set_primary_key(
@@ -49,19 +44,6 @@ where
         for (column, value) in pk_columns.zip(pk_values) {
             active_model.set(column, value);
         }
-    }
-
-    pub fn instance_service<F>(self, action: F) -> Self
-    where
-        F: actix_web::dev::HttpServiceFactory + 'static,
-    {
-        let id_path = T::id_path(None);
-        let scope = self.scope.service(web::scope(&id_path).service(action));
-        Self { scope, ..self }
-    }
-
-    pub fn into_service(self) -> Scope {
-        self.scope
     }
 
     async fn get(
