@@ -5,26 +5,27 @@ use sea_orm::{
     sea_query::IntoValueTuple, ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
     Iterable, PaginatorTrait, PrimaryKeyToColumn, PrimaryKeyTrait, QueryFilter,
 };
-use serde::{de::DeserializeOwned, Serialize};
+use serde::de::DeserializeOwned;
 use std::marker::PhantomData;
 
-pub struct RestModel<Entity: Rest>
+pub struct RestModel<T>
 where
-    Entity::Model:
-        Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
+    T: Rest + 'static,
+    <T::Entity as EntityTrait>::Model: IntoActiveModel<T::ActiveModel> + Send + Sync,
 {
-    _pd: PhantomData<Entity>,
+    _pd: PhantomData<T>,
     scope: Scope,
 }
 
-impl<Entity: Rest> RestModel<Entity>
+impl<T> RestModel<T>
 where
-    Entity::Model:
-        Serialize + DeserializeOwned + IntoActiveModel<Entity::ActiveModel> + Send + Sync,
-    <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType: DeserializeOwned + Clone,
+    T: Rest + 'static,
+    <T::Entity as EntityTrait>::Model: IntoActiveModel<T::ActiveModel> + Send + Sync,
+    <<T::Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType:
+        DeserializeOwned + Clone,
 {
     pub fn new(path: &str) -> Self {
-        let id_path = Entity::id_path(None);
+        let id_path = T::id_path(None);
         let scope = web::scope(path)
             .route("", web::get().to(Self::list))
             .route("/new", web::post().to(Self::create))
@@ -39,11 +40,11 @@ where
     }
 
     fn set_primary_key(
-        primary_key: <Entity::PrimaryKey as PrimaryKeyTrait>::ValueType,
-        active_model: &mut Entity::ActiveModel,
+        primary_key: <<T::Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType,
+        active_model: &mut T::ActiveModel,
     ) {
         let pk_columns =
-            <Entity as EntityTrait>::PrimaryKey::iter().map(PrimaryKeyToColumn::into_column);
+            <T::Entity as EntityTrait>::PrimaryKey::iter().map(PrimaryKeyToColumn::into_column);
         let pk_values = primary_key.into_value_tuple();
         for (column, value) in pk_columns.zip(pk_values) {
             active_model.set(column, value);
@@ -54,10 +55,8 @@ where
     where
         F: actix_web::dev::HttpServiceFactory + 'static,
     {
-        let id_path = Entity::id_path(None);
-        let scope = self
-            .scope
-            .service(web::scope(&id_path).service(action));
+        let id_path = T::id_path(None);
+        let scope = self.scope.service(web::scope(&id_path).service(action));
         Self { scope, ..self }
     }
 
@@ -68,11 +67,12 @@ where
     async fn get(
         request: HttpRequest,
         db: web::Data<DatabaseConnection>,
-    ) -> crate::Result<web::Json<Entity::Model>> {
-        let id = Entity::id_from_path(None, request.match_info())?;
-        Entity::find_by_id(id)
+    ) -> crate::Result<web::Json<T::Repr>> {
+        let id = T::id_from_path(None, request.match_info())?;
+        T::Entity::find_by_id(id)
             .one(&**db)
             .await?
+            .map(From::from)
             .map(web::Json)
             .ok_or_else(|| error::ErrorNotFound("Not found").into())
     }
@@ -81,59 +81,68 @@ where
         request: HttpRequest,
         db: web::Data<DatabaseConnection>,
     ) -> crate::Result<HttpResponse> {
-        let id = Entity::id_from_path(None, request.match_info())?;
-        Entity::delete_by_id(id).exec(&**db).await?;
+        let id = T::id_from_path(None, request.match_info())?;
+        T::Entity::delete_by_id(id).exec(&**db).await?;
         Ok(HttpResponse::new(StatusCode::NO_CONTENT))
     }
 
     async fn create(
-        body: web::Json<Entity::Create>,
+        body: web::Json<T::Create>,
         db: web::Data<DatabaseConnection>,
-    ) -> crate::Result<web::Json<Entity::Model>> {
+    ) -> crate::Result<web::Json<T::Repr>> {
         Ok(web::Json(
-            Entity::insert(body.clone().into_active_model())
+            T::Entity::insert(body.clone().into_active_model())
                 .exec_with_returning(&**db)
-                .await?,
+                .await?
+                .into(),
         ))
     }
 
     async fn update(
         request: HttpRequest,
-        body: web::Json<Entity::Update>,
+        body: web::Json<T::Update>,
         db: web::Data<DatabaseConnection>,
-    ) -> crate::Result<web::Json<Entity::Model>> {
+    ) -> crate::Result<web::Json<T::Repr>> {
         let mut active_model = body.clone().into_active_model();
-        let id = Entity::id_from_path(None, request.match_info())?;
+        let id = T::id_from_path(None, request.match_info())?;
         Self::set_primary_key(id, &mut active_model);
-        Ok(web::Json(Entity::update(active_model).exec(&**db).await?))
+        Ok(web::Json(
+            T::Entity::update(active_model).exec(&**db).await?.into(),
+        ))
     }
 
     async fn replace(
         request: HttpRequest,
-        body: web::Json<Entity::Create>,
+        body: web::Json<T::Create>,
         db: web::Data<DatabaseConnection>,
-    ) -> crate::Result<web::Json<Entity::Model>> {
+    ) -> crate::Result<web::Json<T::Repr>> {
         let mut active_model = body.clone().into_active_model();
-        let id = Entity::id_from_path(None, request.match_info())?;
+        let id = T::id_from_path(None, request.match_info())?;
         Self::set_primary_key(id, &mut active_model);
         Ok(web::Json(
-            Entity::insert(active_model)
+            T::Entity::insert(active_model)
                 .exec_with_returning(&**db)
-                .await?,
+                .await?
+                .into(),
         ))
     }
 
     async fn list(
-        query: web::Query<Entity::Filter>,
+        query: web::Query<T::Filter>,
         db: web::Data<DatabaseConnection>,
-    ) -> crate::Result<web::Json<PageNumberPagination<Entity::Model>>> {
+    ) -> crate::Result<web::Json<PageNumberPagination<T::Repr>>> {
         let page = query.page();
         let limit = query.limit();
-        let pagination = Entity::find()
+        let pagination = T::Entity::find()
             .filter(query.condition())
             .paginate(&**db, limit);
         let total = pagination.num_items().await?;
-        let items = pagination.fetch_page(page).await?;
+        let items = pagination
+            .fetch_page(page)
+            .await?
+            .into_iter()
+            .map(From::from)
+            .collect();
         Ok(web::Json(PageNumberPagination { total, items }))
     }
 }

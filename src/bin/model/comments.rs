@@ -72,7 +72,10 @@ impl Filter for FilterModel {
     }
 }
 
-impl Rest for Entity {
+pub struct RestModel;
+impl Rest for RestModel {
+    type Entity = Entity;
+    type Repr = Model;
     type ActiveModel = ActiveModel;
     type Update = UpdateModel;
     type Create = CreateModel;
@@ -81,7 +84,7 @@ impl Rest for Entity {
     fn id_from_path(
         scope: Option<&str>,
         path: &Path<Url>,
-    ) -> woof::Result<<Self::PrimaryKey as PrimaryKeyTrait>::ValueType> {
+    ) -> woof::Result<<PrimaryKey as PrimaryKeyTrait>::ValueType> {
         let scope = scope.map(|scope| format!("{scope}_")).unwrap_or_default();
         let id_path = scope + "id";
         let id = path
