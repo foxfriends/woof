@@ -16,14 +16,10 @@ async fn main() -> anyhow::Result<()> {
         App::new()
             .wrap(actix_web::middleware::NormalizePath::trim())
             .app_data(web::Data::new(db.clone()))
-            .service(
-                RestModel::<model::users::RestModel>::as_service("/users"), // .service(RestModel::<model::posts::RestModel>::as_service("/posts"))
-            )
-            .service(RestModel::<model::posts::RestModel>::as_service("/posts"))
-            .service(RestModel::<model::comments::RestModel>::as_service(
-                "/comments",
-            ))
-            .service(RestModel::<model::votes::RestModel>::as_service("/votes"))
+            .service(RestModel::<model::users::RestModel>::new("/users").as_service())
+            .service(RestModel::<model::posts::RestModel>::new("/posts").as_service())
+            .service(RestModel::<model::comments::RestModel>::new("/comments").as_service())
+            .service(RestModel::<model::votes::RestModel>::new("/votes").as_service())
     })
     .bind(("0.0.0.0", 8080))?
     .run()

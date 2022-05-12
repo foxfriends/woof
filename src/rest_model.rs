@@ -17,6 +17,7 @@ use std::marker::PhantomData;
 
 pub struct RestModel<T> {
     _pd: PhantomData<T>,
+    path: String,
 }
 
 impl<T> RestModel<T>
@@ -26,9 +27,16 @@ where
     <<T::Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType:
         DeserializeOwned + Clone,
 {
+    pub fn new(path: impl AsRef<str>) -> Self {
+        Self {
+            _pd: PhantomData,
+            path: path.as_ref().to_owned(),
+        }
+    }
+
     // TODO: is this the best way to write this return type?
     pub fn as_service(
-        path: &str,
+        &self,
     ) -> Scope<
         impl ServiceFactory<
             ServiceRequest,
@@ -39,7 +47,7 @@ where
         >,
     > {
         let id_path = T::id_path(None);
-        web::scope(path)
+        web::scope(&self.path)
             .route("", web::get().to(Self::list))
             .route("/new", web::post().to(Self::create))
             .service(
